@@ -1,27 +1,37 @@
 mod collector;
 
+use std::thread;
+use std::time::Duration;
+
 fn main() {
     println!("Starting NetScope...");
 
-    let processes =
-        collector::collect();
+    loop {
+        let processes =
+            collector::collect();
 
-    println!(
-        "Processes discovered: {}",
-        processes.len()
-    );
-
-    for process in processes.iter().take(10) {
+        println!("\n====================");
         println!(
-            "{} → {} ({} KB)",
-            process.pid,
-            process.process_name,
-            process.memory_kb
+            "Processes discovered: {}",
+            processes.len()
         );
 
-        println!(
-            "   {}",
-            process.executable_path
+        for process in processes.iter().take(10) {
+            println!(
+                "{} → {} ({} KB)",
+                process.pid,
+                process.process_name,
+                process.memory_kb
+            );
+
+            println!(
+                "   {}",
+                process.executable_path
+            );
+        }
+
+        thread::sleep(
+            Duration::from_secs(1)
         );
     }
 }
