@@ -1,18 +1,15 @@
 mod models;
 mod process_discovery;
 
-pub fn initialize() {
-    println!("Collector initialized");
+pub use models::ProcessInfo;
 
-    let processes = process_discovery::discover_processes();
+pub fn collect() -> Vec<ProcessInfo> {
+    let mut processes =
+        process_discovery::discover_processes();
 
-    println!("Processes discovered: {}", processes.len());
+    processes.sort_by(
+        |a, b| b.memory_kb.cmp(&a.memory_kb)
+    );
 
-    for process in processes.iter().take(10) {
-        println!(
-            "{} → {}",
-            process.pid,
-            process.process_name
-        );
-    }
+    processes
 }
