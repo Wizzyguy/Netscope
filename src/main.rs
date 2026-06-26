@@ -18,9 +18,9 @@ fn main() {
             "=== NetScope ===\n"
         );
 
-        for process in processes.iter().take(10) {
+        for process in processes.iter().take(5) {
             let sockets =
-                collector::count_process_sockets(
+                collector::discover_socket_inodes(
                     process.pid,
                 );
 
@@ -31,14 +31,18 @@ fn main() {
             );
 
             println!(
-                "Sockets: {}",
-                sockets
+                "Unique sockets: {}",
+                sockets.len()
             );
 
-            println!(
-                "{}\n",
-                process.executable_path
-            );
+            for inode in sockets.iter().take(5) {
+                println!(
+                    "socket:[{}]",
+                    inode
+                );
+            }
+
+            println!();
         }
 
         thread::sleep(

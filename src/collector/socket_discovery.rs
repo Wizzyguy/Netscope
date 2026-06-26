@@ -1,8 +1,9 @@
+use std::collections::HashSet;
 use std::fs;
 
-pub fn count_process_sockets(
+pub fn discover_socket_inodes(
     pid: u32,
-) -> usize {
+) -> Vec<String> {
     let fd_path =
         format!(
             "/proc/{}/fd",
@@ -16,11 +17,12 @@ pub fn count_process_sockets(
             Ok(v) => v,
 
             Err(_) => {
-                return 0;
+                return vec![];
             }
         };
 
-    let mut sockets = 0;
+    let mut unique =
+        HashSet::new();
 
     for entry in entries {
         if let Ok(entry) =
@@ -35,16 +37,34 @@ pub fn count_process_sockets(
                     target
                         .to_string_lossy();
 
-                if target
-                    .starts_with(
-                        "socket:"
-                    )
-                {
-                    sockets += 1;
+                if target.starts_with(
+                    "socket:["
+                ) {
+                    let inode =
+                        target
+                            .replace(
+                                "socket:[",
+                                "",
+                            )
+                            .replace(
+                                "]",
+                                "",
+                            );
+
+                    unique.insert(
+                        inode
+                    );
                 }
             }
         }
     }
+
+    let mut sockets =
+        unique
+            .into_iter()
+            .collect::<Vec<_>>();
+
+    sockets.sort();
 
     sockets
 }

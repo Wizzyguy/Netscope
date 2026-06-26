@@ -3,7 +3,7 @@ mod process_discovery;
 mod socket_discovery;
 
 pub use models::ProcessInfo;
-pub use socket_discovery::count_process_sockets;
+pub use socket_discovery::discover_socket_inodes;
 
 pub fn collect() -> Vec<ProcessInfo> {
     let mut processes =
