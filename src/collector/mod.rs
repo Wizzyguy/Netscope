@@ -1,22 +1,18 @@
 mod models;
 mod process_discovery;
 mod socket_discovery;
+mod tcp_discovery;
+
+pub use process_discovery::{
+    discover_processes,
+};
+
+pub use socket_discovery::{
+    discover_socket_inodes,
+};
+
+pub use tcp_discovery::{
+    read_tcp_table,
+};
 
 pub use models::ProcessInfo;
-pub use socket_discovery::discover_socket_inodes;
-
-pub fn collect() -> Vec<ProcessInfo> {
-    let mut processes =
-        process_discovery::discover_processes();
-
-    processes.sort_by(
-        |a, b| {
-            b.memory_kb
-                .cmp(
-                    &a.memory_kb
-                )
-        },
-    );
-
-    processes
-}

@@ -1,52 +1,81 @@
 mod collector;
 
-use std::thread;
-use std::time::Duration;
-
-fn clear_terminal() {
-    print!("\x1B[2J\x1B[1;1H");
-}
+use std::collections::HashSet;
 
 fn main() {
-    loop {
-        clear_terminal();
+    println!("\n=== NetScope ===\n");
 
-        let processes =
-            collector::collect();
+    let processes =
+        collector::discover_processes();
 
-        println!(
-            "=== NetScope ===\n"
-        );
+    let tcp_rows =
+        collector::read_tcp_table();
 
-        for process in processes.iter().take(5) {
-            let sockets =
-                collector::discover_socket_inodes(
-                    process.pid,
-                );
+    let mut shown = 0;
 
-            println!(
-                "{} → {}",
-                process.pid,
-                process.process_name
+    for process in processes {
+        let sockets =
+            collector::discover_socket_inodes(
+                process.pid
             );
 
-            println!(
-                "Unique sockets: {}",
-                sockets.len()
-            );
-
-            for inode in sockets.iter().take(5) {
-                println!(
-                    "socket:[{}]",
-                    inode
-                );
-            }
-
-            println!();
+        if sockets.is_empty() {
+            continue;
         }
 
-        thread::sleep(
-            Duration::from_secs(1)
+        let socket_set =
+            sockets
+                .into_iter()
+                .collect::<HashSet<_>>();
+
+        let mut remotes =
+            HashSet::<String>::new();
+
+        for row in &tcp_rows {
+            if row.len() < 10 {
+                continue;
+            }
+
+            if socket_set.contains(
+                &row[9]
+            ) {
+                remotes.insert(
+                    row[2].clone()
+                );
+            }
+        }
+
+        if remotes.is_empty() {
+            continue;
+        }
+
+        println!(
+            "{} → {}",
+            process.pid,
+            process.process_name
         );
+
+        let mut count = 0;
+
+        for remote in remotes {
+            println!(
+                "→ {}",
+                remote
+            );
+
+            count += 1;
+
+            if count >= 5 {
+                break;
+            }
+        }
+
+        println!();
+
+        shown += 1;
+
+        if shown >= 10 {
+            break;
+        }
     }
 }
