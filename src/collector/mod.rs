@@ -2,6 +2,7 @@ mod models;
 mod process_discovery;
 mod socket_discovery;
 mod tcp_discovery;
+pub mod network_usage;
 
 pub use process_discovery::{
     discover_processes,
