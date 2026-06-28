@@ -7,6 +7,9 @@ Phase 0 — Project Setup
 Status: Completed
 
 Phase 1 — Collector Engine
+Status: Completed
+
+Phase 2  — Live Monitoring
 Status: In Progress
 
 ## Goal
