@@ -2,7 +2,6 @@ mod collector;
 
 use std::{
     collections::HashMap,
-    io::{stdout, Write},
     thread,
     time::Duration,
 };
@@ -13,32 +12,24 @@ use collector::{
     discover_socket_inodes,
 };
 
+fn clear_screen() {
+    print!("\x1B[2J\x1B[1;1H");
+}
+
 fn main() {
     println!("Starting NetScope...");
 
     loop {
-        // Clear screen
-        print!("\x1B[2J\x1B[1;1H");
-        stdout().flush().unwrap();
+        clear_screen();
 
-        println!("=== NetScope ===\n");
+        println!("=== NetScope Dashboard ===\n");
 
         let processes = discover_processes();
 
-        let mut process_sockets:
-            HashMap<u32, Vec<String>> =
-            HashMap::new();
+        let mut process_sockets =
+            HashMap::<u32, Vec<String>>::new();
 
-        let mut process_names:
-            HashMap<u32, String> =
-            HashMap::new();
-
-        for process in processes {
-            process_names.insert(
-                process.pid,
-                process.process_name.clone(),
-            );
-
+        for process in &processes {
             let sockets =
                 discover_socket_inodes(
                     process.pid,
@@ -55,35 +46,68 @@ fn main() {
                 process_sockets,
             );
 
-        for (pid, (rx, tx)) in usage {
-            if rx == 0 && tx == 0 {
-                continue;
-            }
+        let mut rows:
+            Vec<(u32, u64, u64)> =
+            usage
+                .into_iter()
+                .map(
+                    |(pid, (rx, tx))| {
+                        (pid, rx, tx)
+                    },
+                )
+                .collect();
 
+        rows.sort_by(
+            |a, b| {
+                b.1.cmp(&a.1)
+            },
+        );
+
+        println!(
+            "{:<8} {:<18} {:<12} {:<12}",
+            "PID",
+            "PROCESS",
+            "RX",
+            "TX"
+        );
+
+        println!(
+            "------------------------------------------------"
+        );
+
+        for (pid, rx, tx)
+            in rows.iter().take(15)
+        {
             let name =
-                process_names
-                    .get(&pid)
-                    .map(|s| s.as_str())
-                    .unwrap_or("unknown");
+                processes
+                    .iter()
+                    .find(
+                        |p| p.pid == *pid,
+                    )
+                    .map(
+                        |p| {
+                            p.process_name
+                                .clone()
+                        },
+                    )
+                    .unwrap_or(
+                        String::from(
+                            "unknown",
+                        ),
+                    );
 
             println!(
-                "{} → {}",
+                "{:<8} {:<18} {:<12} {:<12}",
                 pid,
-                name
-            );
-
-            println!(
-                "RX: {} bytes",
-                rx
-            );
-
-            println!(
-                "TX: {} bytes",
+                name,
+                rx,
                 tx
             );
-
-            println!();
         }
+
+        println!(
+            "\nRefreshing every 2 seconds..."
+        );
 
         thread::sleep(
             Duration::from_secs(2),
