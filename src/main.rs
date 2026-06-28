@@ -1,59 +1,92 @@
 mod collector;
 
+use std::{
+    collections::HashMap,
+    io::{stdout, Write},
+    thread,
+    time::Duration,
+};
+
 use collector::{
     collect_per_process_usage,
     discover_processes,
     discover_socket_inodes,
 };
 
-use std::collections::HashMap;
-
 fn main() {
-    println!("Starting NetScope...\n");
+    println!("Starting NetScope...");
 
-    let processes = discover_processes();
+    loop {
+        // Clear screen
+        print!("\x1B[2J\x1B[1;1H");
+        stdout().flush().unwrap();
 
-    let mut process_sockets = HashMap::new();
+        println!("=== NetScope ===\n");
 
-    for process in &processes {
-        let sockets =
-            discover_socket_inodes(process.pid);
+        let processes = discover_processes();
 
-        if !sockets.is_empty() {
+        let mut process_sockets:
+            HashMap<u32, Vec<String>> =
+            HashMap::new();
+
+        let mut process_names:
+            HashMap<u32, String> =
+            HashMap::new();
+
+        for process in processes {
+            process_names.insert(
+                process.pid,
+                process.process_name.clone(),
+            );
+
+            let sockets =
+                discover_socket_inodes(
+                    process.pid,
+                );
+
             process_sockets.insert(
                 process.pid,
                 sockets,
             );
         }
-    }
 
-    let throughput =
-        collect_per_process_usage(
-            process_sockets,
-        );
-
-    println!("=== NetScope ===\n");
-
-    let mut shown = 0;
-
-    for process in &processes {
-        if let Some((rx, tx)) =
-            throughput.get(&process.pid)
-        {
-            println!(
-                "{} → {}",
-                process.pid,
-                process.process_name
+        let usage =
+            collect_per_process_usage(
+                process_sockets,
             );
 
-            println!("RX: {} bytes", rx);
-            println!("TX: {} bytes\n", tx);
-
-            shown += 1;
-
-            if shown >= 10 {
-                break;
+        for (pid, (rx, tx)) in usage {
+            if rx == 0 && tx == 0 {
+                continue;
             }
+
+            let name =
+                process_names
+                    .get(&pid)
+                    .map(|s| s.as_str())
+                    .unwrap_or("unknown");
+
+            println!(
+                "{} → {}",
+                pid,
+                name
+            );
+
+            println!(
+                "RX: {} bytes",
+                rx
+            );
+
+            println!(
+                "TX: {} bytes",
+                tx
+            );
+
+            println!();
         }
+
+        thread::sleep(
+            Duration::from_secs(2),
+        );
     }
 }
