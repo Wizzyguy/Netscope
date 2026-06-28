@@ -1,66 +1,79 @@
 mod collector;
 
+use collector::{
+    collect_per_process_usage,
+    discover_processes,
+    discover_socket_inodes,
+    filter_idle,
+    sort_rows,
+};
+
 use std::{
     collections::HashMap,
     thread,
     time::Duration,
 };
 
-use collector::{
-    collect_per_process_usage,
-    discover_processes,
-    discover_socket_inodes,
-};
-
-fn clear_screen() {
-    print!("\x1B[2J\x1B[1;1H");
-}
-
 fn main() {
+
     println!("Starting NetScope...");
 
     loop {
-        clear_screen();
 
-        println!("=== NetScope Dashboard ===\n");
+        let processes =
+            discover_processes();
 
-        let processes = discover_processes();
-
-        let mut process_sockets =
-            HashMap::<u32, Vec<String>>::new();
+        let mut sockets =
+            HashMap::new();
 
         for process in &processes {
-            let sockets =
-                discover_socket_inodes(
-                    process.pid,
-                );
 
-            process_sockets.insert(
+            sockets.insert(
                 process.pid,
-                sockets,
+                discover_socket_inodes(
+                    process.pid
+                ),
             );
         }
 
         let usage =
             collect_per_process_usage(
-                process_sockets,
+                sockets
             );
 
-        let mut rows:
-            Vec<(u32, u64, u64)> =
-            usage
-                .into_iter()
-                .map(
-                    |(pid, (rx, tx))| {
-                        (pid, rx, tx)
-                    },
-                )
-                .collect();
+        let mut rows =
+            Vec::new();
 
-        rows.sort_by(
-            |a, b| {
-                b.1.cmp(&a.1)
-            },
+        for process in processes {
+
+            if let Some(
+                (rx, tx)
+            ) = usage.get(
+                &process.pid
+            ) {
+
+                rows.push((
+                    process.pid,
+                    process.process_name,
+                    *rx,
+                    *tx,
+                ));
+            }
+        }
+
+        rows =
+            filter_idle(rows);
+
+        sort_rows(
+            &mut rows
+        );
+
+        print!(
+            "\x1B[2J\x1B[1;1H"
+        );
+
+        println!(
+            "\n=== NetScope Dashboard ===\n"
         );
 
         println!(
@@ -75,42 +88,29 @@ fn main() {
             "------------------------------------------------"
         );
 
-        for (pid, rx, tx)
-            in rows.iter().take(15)
+        for (
+            pid,
+            name,
+            rx,
+            tx,
+        ) in rows.iter().take(15)
         {
-            let name =
-                processes
-                    .iter()
-                    .find(
-                        |p| p.pid == *pid,
-                    )
-                    .map(
-                        |p| {
-                            p.process_name
-                                .clone()
-                        },
-                    )
-                    .unwrap_or(
-                        String::from(
-                            "unknown",
-                        ),
-                    );
 
             println!(
                 "{:<8} {:<18} {:<12} {:<12}",
                 pid,
                 name,
                 rx,
-                tx
+                tx,
             );
         }
 
         println!(
-            "\nRefreshing every 2 seconds..."
+            "\nFiltering idle processes..."
         );
 
         thread::sleep(
-            Duration::from_secs(2),
+            Duration::from_secs(2)
         );
     }
 }
