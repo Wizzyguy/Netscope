@@ -1,5 +1,3 @@
-pub mod models;
-
 pub mod process_discovery;
 pub use process_discovery::discover_processes;
 
@@ -15,4 +13,11 @@ pub use network_usage::collect_network_usage;
 pub mod per_process_throughput;
 pub use per_process_throughput::collect_per_process_usage;
 
+pub mod dashboard_controls;
+pub use dashboard_controls::{
+    sort_rows,
+    filter_idle,
+};
+
+pub mod models;
 pub use models::ProcessInfo;
