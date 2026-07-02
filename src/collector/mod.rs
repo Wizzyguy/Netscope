@@ -17,6 +17,7 @@ pub mod dashboard_controls;
 pub use dashboard_controls::{
     sort_rows,
     filter_idle,
+    filter_by_name,
 };
 
 pub mod models;
