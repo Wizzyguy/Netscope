@@ -5,6 +5,7 @@ use collector::{
     discover_processes,
     discover_socket_inodes,
     filter_idle,
+    filter_by_name,
     sort_rows,
 };
 
@@ -68,12 +69,26 @@ fn main() {
             &mut rows
         );
 
+        let search =
+            "fire";
+
+        rows =
+            filter_by_name(
+                rows,
+                search,
+            );
+
         print!(
             "\x1B[2J\x1B[1;1H"
         );
 
         println!(
             "\n=== NetScope Dashboard ===\n"
+        );
+
+        println!(
+            "Search Filter: {}\n",
+            search
         );
 
         println!(

@@ -21,3 +21,22 @@ pub fn filter_idle(
         )
         .collect()
 }
+
+pub fn filter_by_name(
+    rows: Vec<(u32, String, u64, u64)>,
+    search: &str,
+) -> Vec<(u32, String, u64, u64)> {
+
+    let search =
+        search.to_lowercase();
+
+    rows.into_iter()
+        .filter(
+            |(_, name, _, _)| {
+                name
+                    .to_lowercase()
+                    .contains(&search)
+            }
+        )
+        .collect()
+}
