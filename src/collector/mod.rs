@@ -20,5 +20,11 @@ pub use dashboard_controls::{
     filter_by_name,
 };
 
+pub mod keyboard;
+pub use keyboard::{
+    KeyAction,
+    read_key,
+};
+
 pub mod models;
 pub use models::ProcessInfo;

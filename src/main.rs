@@ -1,131 +1,157 @@
 mod collector;
+mod ui;
 
 use collector::{
     collect_per_process_usage,
     discover_processes,
     discover_socket_inodes,
-    filter_idle,
     filter_by_name,
+    filter_idle,
+    read_key,
     sort_rows,
+    KeyAction,
+};
+
+use ratatui::{
+    backend::CrosstermBackend,
+    Terminal,
+};
+
+use crossterm::{
+    execute,
+    terminal::{
+        enable_raw_mode,
+        disable_raw_mode,
+        EnterAlternateScreen,
+        LeaveAlternateScreen,
+    },
 };
 
 use std::{
     collections::HashMap,
-    thread,
-    time::Duration,
+    io::stdout,
+    time::{Duration, Instant},
 };
 
-fn main() {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Terminal setup
+    enable_raw_mode()?;
 
-    println!("Starting NetScope...");
+    let mut stdout = stdout();
+
+    execute!(stdout, EnterAlternateScreen)?;
+
+    let backend = CrosstermBackend::new(stdout);
+
+    let mut terminal = Terminal::new(backend)?;
+
+    let mut search = String::new();
+    let mut search_mode = false;
+
+    let mut last_refresh = Instant::now();
 
     loop {
+        // ----------------------------
+        // Keyboard
+        // ----------------------------
 
-        let processes =
-            discover_processes();
+        match read_key() {
+            KeyAction::Quit => break,
 
-        let mut sockets =
-            HashMap::new();
-
-        for process in &processes {
-
-            sockets.insert(
-                process.pid,
-                discover_socket_inodes(
-                    process.pid
-                ),
-            );
-        }
-
-        let usage =
-            collect_per_process_usage(
-                sockets
-            );
-
-        let mut rows =
-            Vec::new();
-
-        for process in processes {
-
-            if let Some(
-                (rx, tx)
-            ) = usage.get(
-                &process.pid
-            ) {
-
-                rows.push((
-                    process.pid,
-                    process.process_name,
-                    *rx,
-                    *tx,
-                ));
+            KeyAction::Search => {
+                search_mode = true;
+                search.clear();
             }
+
+            KeyAction::Character(c) => {
+                if search_mode {
+                    search.push(c);
+                }
+            }
+
+            KeyAction::Backspace => {
+                if search_mode {
+                    search.pop();
+                }
+            }
+
+            KeyAction::Enter => {
+                search_mode = false;
+            }
+
+            KeyAction::Esc => {
+                search_mode = false;
+                search.clear();
+            }
+
+            KeyAction::None => {}
         }
 
-        rows =
-            filter_idle(rows);
+        // ----------------------------
+        // Refresh every 300 ms
+        // ----------------------------
 
-        sort_rows(
-            &mut rows
-        );
+        if last_refresh.elapsed() >= Duration::from_millis(300) {
 
-        let search =
-            "fire";
+            let processes = discover_processes();
 
-        rows =
-            filter_by_name(
-                rows,
-                search,
-            );
+            let mut sockets = HashMap::new();
 
-        print!(
-            "\x1B[2J\x1B[1;1H"
-        );
+            for process in &processes {
+                sockets.insert(
+                    process.pid,
+                    discover_socket_inodes(process.pid),
+                );
+            }
 
-        println!(
-            "\n=== NetScope Dashboard ===\n"
-        );
+            let usage = collect_per_process_usage(sockets);
 
-        println!(
-            "Search Filter: {}\n",
-            search
-        );
+            let mut rows = Vec::new();
 
-        println!(
-            "{:<8} {:<18} {:<12} {:<12}",
-            "PID",
-            "PROCESS",
-            "RX",
-            "TX"
-        );
+            for process in processes {
 
-        println!(
-            "------------------------------------------------"
-        );
+                if let Some((rx, tx)) = usage.get(&process.pid) {
 
-        for (
-            pid,
-            name,
-            rx,
-            tx,
-        ) in rows.iter().take(15)
-        {
+                    rows.push((
+                        process.pid,
+                        process.process_name,
+                        *rx,
+                        *tx,
+                    ));
+                }
+            }
 
-            println!(
-                "{:<8} {:<18} {:<12} {:<12}",
-                pid,
-                name,
-                rx,
-                tx,
-            );
+            rows = filter_idle(rows);
+
+            sort_rows(&mut rows);
+
+            if !search.is_empty() {
+                rows = filter_by_name(rows, &search);
+            }
+
+            terminal.draw(|frame| {
+                ui::render_dashboard(
+                    frame,
+                    &search,
+                    search_mode,
+                    &rows,
+                );
+            })?;
+
+            last_refresh = Instant::now();
         }
-
-        println!(
-            "\nFiltering idle processes..."
-        );
-
-        thread::sleep(
-            Duration::from_secs(2)
-        );
     }
+
+    disable_raw_mode()?;
+
+    execute!(
+        terminal.backend_mut(),
+        LeaveAlternateScreen,
+    )?;
+
+    terminal.show_cursor()?;
+
+    println!("Exiting NetScope...");
+
+    Ok(())
 }
