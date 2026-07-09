@@ -12,21 +12,20 @@ use collector::{
     KeyAction,
 };
 
-use ratatui::{
-    backend::CrosstermBackend,
-    Terminal,
-};
+use ui::App;
 
 use crossterm::{
+    cursor::{Hide, Show},
     execute,
     terminal::{
-        enable_raw_mode,
         disable_raw_mode,
+        enable_raw_mode,
         EnterAlternateScreen,
         LeaveAlternateScreen,
     },
-    cursor::{Hide, Show},
 };
+
+use ratatui::{backend::CrosstermBackend, Terminal};
 
 use std::{
     collections::HashMap,
@@ -36,6 +35,9 @@ use std::{
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // ----------------------------------------
+    // Terminal setup
+    // ----------------------------------------
 
     enable_raw_mode()?;
 
@@ -44,20 +46,78 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     execute!(
         stdout,
         EnterAlternateScreen,
-        Hide
+        Hide,
     )?;
 
     let backend = CrosstermBackend::new(stdout);
 
     let mut terminal = Terminal::new(backend)?;
 
+    let mut app = App::new();
+
     let mut search = String::new();
     let mut search_mode = false;
 
     loop {
+        //----------------------------------------
+        // Collect processes
+        //----------------------------------------
+
+        let processes = discover_processes();
+
+        let mut sockets = HashMap::new();
+
+        for process in &processes {
+            sockets.insert(
+                process.pid,
+                discover_socket_inodes(process.pid),
+            );
+        }
+
+        let usage = collect_per_process_usage(sockets);
+
+        let mut rows = Vec::new();
+
+        for process in processes {
+            if let Some((rx, tx)) = usage.get(&process.pid) {
+                rows.push((
+                    process.pid,
+                    process.process_name,
+                    *rx,
+                    *tx,
+                ));
+            }
+        }
+
+        rows = filter_idle(rows);
+
+        sort_rows(&mut rows);
+
+        if !search.is_empty() {
+            rows = filter_by_name(rows, &search);
+        }
+
+        app.ensure_valid(rows.len());
+
+        //----------------------------------------
+        // Draw UI
+        //----------------------------------------
+
+        terminal.draw(|frame| {
+            ui::render_dashboard(
+                frame,
+                &search,
+                search_mode,
+                &rows,
+		app.selected
+            );
+        })?;
+
+        //----------------------------------------
+        // Keyboard
+        //----------------------------------------
 
         match read_key() {
-
             KeyAction::Quit => break,
 
             KeyAction::Search => {
@@ -86,63 +146,30 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 search.clear();
             }
 
+            KeyAction::Up => {
+                app.previous();
+            }
+
+            KeyAction::Down => {
+                app.next(rows.len());
+            }
+
             KeyAction::None => {}
         }
 
-        let processes = discover_processes();
-
-        let mut sockets = HashMap::new();
-
-        for process in &processes {
-            sockets.insert(
-                process.pid,
-                discover_socket_inodes(process.pid),
-            );
-        }
-
-        let usage = collect_per_process_usage(sockets);
-
-        let mut rows = Vec::new();
-
-        for process in processes {
-
-            if let Some((rx, tx)) = usage.get(&process.pid) {
-
-                rows.push((
-                    process.pid,
-                    process.process_name,
-                    *rx,
-                    *tx,
-                ));
-            }
-        }
-
-        rows = filter_idle(rows);
-
-        sort_rows(&mut rows);
-
-        if !search.is_empty() {
-            rows = filter_by_name(rows, &search);
-        }
-
-        terminal.draw(|frame| {
-            ui::render_dashboard(
-                frame,
-                &search,
-                search_mode,
-                &rows,
-            );
-        })?;
-
-        thread::sleep(Duration::from_millis(300));
+        thread::sleep(Duration::from_millis(100));
     }
+
+    //----------------------------------------
+    // Restore terminal
+    //----------------------------------------
 
     disable_raw_mode()?;
 
     execute!(
         terminal.backend_mut(),
         Show,
-        LeaveAlternateScreen
+        LeaveAlternateScreen,
     )?;
 
     terminal.show_cursor()?;

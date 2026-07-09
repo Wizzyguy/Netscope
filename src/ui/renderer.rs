@@ -13,23 +13,27 @@ pub fn render_dashboard(
     search: &str,
     search_mode: bool,
     rows: &Vec<(u32, String, u64, u64)>,
+    selected: usize,
 ) {
     let stats = DashboardStats::from_rows(rows, search);
 
-    // Main layout
+    //--------------------------------------------------
+    // Layout
+    //--------------------------------------------------
+
     let layout = Layout::default()
         .direction(Direction::Vertical)
         .margin(1)
         .constraints([
-            Constraint::Length(3), // Header
-            Constraint::Min(10),   // Body
-            Constraint::Length(2), // Footer
+            Constraint::Length(3),
+            Constraint::Min(10),
+            Constraint::Length(2),
         ])
         .split(frame.area());
 
-    //----------------------------------------
+    //--------------------------------------------------
     // Header
-    //----------------------------------------
+    //--------------------------------------------------
 
     let header = Paragraph::new("NetScope")
         .alignment(Alignment::Center)
@@ -41,9 +45,9 @@ pub fn render_dashboard(
 
     frame.render_widget(header, layout[0]);
 
-    //----------------------------------------
-    // Split body
-    //----------------------------------------
+    //--------------------------------------------------
+    // Split Body
+    //--------------------------------------------------
 
     let body = Layout::default()
         .direction(Direction::Horizontal)
@@ -53,9 +57,9 @@ pub fn render_dashboard(
         ])
         .split(layout[1]);
 
-    //----------------------------------------
-    // Left panel
-    //----------------------------------------
+    //--------------------------------------------------
+    // Left Panel
+    //--------------------------------------------------
 
     let left = Layout::default()
         .direction(Direction::Vertical)
@@ -65,9 +69,9 @@ pub fn render_dashboard(
         ])
         .split(body[0]);
 
-    //----------------------------------------
+    //--------------------------------------------------
     // Search
-    //----------------------------------------
+    //--------------------------------------------------
 
     let search_text = if search_mode {
         format!("Search: {}_", search)
@@ -77,18 +81,19 @@ pub fn render_dashboard(
         format!("Search: {}", search)
     };
 
-    let search_widget = Paragraph::new(search_text)
-        .block(
-            Block::default()
-                .title("Filter")
-                .borders(Borders::ALL),
-        );
+    frame.render_widget(
+        Paragraph::new(search_text)
+            .block(
+                Block::default()
+                    .title("Filter")
+                    .borders(Borders::ALL),
+            ),
+        left[0],
+    );
 
-    frame.render_widget(search_widget, left[0]);
-
-    //----------------------------------------
+    //--------------------------------------------------
     // Process Table
-    //----------------------------------------
+    //--------------------------------------------------
 
     let header = Row::new(vec![
         "PID",
@@ -98,6 +103,7 @@ pub fn render_dashboard(
     ])
     .style(
         Style::default()
+            .fg(Color::Yellow)
             .add_modifier(Modifier::BOLD),
     );
 
@@ -120,49 +126,77 @@ pub fn render_dashboard(
         ],
     )
     .header(header)
+    .row_highlight_style(
+        Style::default()
+            .bg(Color::Blue)
+            .fg(Color::White)
+            .add_modifier(Modifier::BOLD),
+    )
+    .highlight_symbol("▶ ")
     .block(
         Block::default()
             .title("Processes")
             .borders(Borders::ALL),
     );
 
-    frame.render_widget(table, left[1]);
+    let mut state = TableState::default();
 
-    //----------------------------------------
-    // Statistics Panel
-    //----------------------------------------
+    if !rows.is_empty() {
+        state.select(Some(selected));
+    }
 
-    let stats_text = vec![
-        Line::from(format!("Processes : {}", stats.total_processes)),
-        Line::from(format!("Active    : {}", stats.active_processes)),
+    frame.render_stateful_widget(
+        table,
+        left[1],
+        &mut state,
+    );
+
+    //--------------------------------------------------
+    // Statistics
+    //--------------------------------------------------
+
+    let stats_panel = Paragraph::new(vec![
+        Line::from(format!(
+            "Processes : {}",
+            stats.total_processes
+        )),
+        Line::from(format!(
+            "Active    : {}",
+            stats.active_processes
+        )),
         Line::from(""),
-        Line::from(format!("Download  : {}", stats.rx_string())),
-        Line::from(format!("Upload    : {}", stats.tx_string())),
+        Line::from(format!(
+            "Download  : {}",
+            stats.rx_string()
+        )),
+        Line::from(format!(
+            "Upload    : {}",
+            stats.tx_string()
+        )),
         Line::from(""),
-        Line::from(format!("Search    : {}", stats.search)),
-    ];
-
-    let stats_panel = Paragraph::new(stats_text)
-        .block(
-            Block::default()
-                .title("Statistics")
-                .borders(Borders::ALL),
-        );
-
-    frame.render_widget(stats_panel, body[1]);
-
-    //----------------------------------------
-    // Footer
-    //----------------------------------------
-
-    let footer = Paragraph::new(
-        " q Quit   / Search   Esc Cancel   Enter Apply ",
-    )
-    .alignment(Alignment::Center)
+        Line::from(format!(
+            "Search    : {}",
+            stats.search
+        )),
+    ])
     .block(
         Block::default()
+            .title("Statistics")
             .borders(Borders::ALL),
     );
 
-    frame.render_widget(footer, layout[2]);
+    frame.render_widget(stats_panel, body[1]);
+
+    //--------------------------------------------------
+    // Footer
+    //--------------------------------------------------
+
+    frame.render_widget(
+        Paragraph::new(
+            "↑↓ Navigate    / Search    Enter Details    q Quit",
+        )
+        .alignment(Alignment::Center)
+        .block(Block::default().borders(Borders::ALL)),
+        layout[2],
+    );
 }
