@@ -1,5 +1,6 @@
 use crate::ui::{
     format::format_bytes,
+    inspector::render_inspector,
     stats::DashboardStats,
 };
 
@@ -18,16 +19,17 @@ pub fn render_dashboard(
     let stats = DashboardStats::from_rows(rows, search);
 
     //--------------------------------------------------
-    // Layout
+    // Main Layout
     //--------------------------------------------------
 
     let layout = Layout::default()
         .direction(Direction::Vertical)
         .margin(1)
         .constraints([
-            Constraint::Length(3),
-            Constraint::Min(10),
-            Constraint::Length(2),
+            Constraint::Length(3), // Header
+            Constraint::Min(10),   // Body
+            Constraint::Length(9), // Inspector
+            Constraint::Length(2), // Footer
         ])
         .split(frame.area());
 
@@ -46,7 +48,7 @@ pub fn render_dashboard(
     frame.render_widget(header, layout[0]);
 
     //--------------------------------------------------
-    // Split Body
+    // Body
     //--------------------------------------------------
 
     let body = Layout::default()
@@ -58,14 +60,14 @@ pub fn render_dashboard(
         .split(layout[1]);
 
     //--------------------------------------------------
-    // Left Panel
+    // Left Side
     //--------------------------------------------------
 
     let left = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(3),
-            Constraint::Min(10),
+            Constraint::Min(8),
         ])
         .split(body[0]);
 
@@ -92,7 +94,7 @@ pub fn render_dashboard(
     );
 
     //--------------------------------------------------
-    // Process Table
+    // Table
     //--------------------------------------------------
 
     let header = Row::new(vec![
@@ -120,24 +122,24 @@ pub fn render_dashboard(
         table_rows,
         [
             Constraint::Length(8),
-            Constraint::Percentage(45),
-            Constraint::Length(14),
-            Constraint::Length(14),
+            Constraint::Percentage(50),
+            Constraint::Length(15),
+            Constraint::Length(15),
         ],
     )
     .header(header)
+    .block(
+        Block::default()
+            .title("Processes")
+            .borders(Borders::ALL),
+    )
     .row_highlight_style(
         Style::default()
             .bg(Color::Blue)
             .fg(Color::White)
             .add_modifier(Modifier::BOLD),
     )
-    .highlight_symbol("▶ ")
-    .block(
-        Block::default()
-            .title("Processes")
-            .borders(Borders::ALL),
-    );
+    .highlight_symbol("▶ ");
 
     let mut state = TableState::default();
 
@@ -185,18 +187,55 @@ pub fn render_dashboard(
             .borders(Borders::ALL),
     );
 
-    frame.render_widget(stats_panel, body[1]);
+    frame.render_widget(
+        stats_panel,
+        body[1],
+    );
+
+    //--------------------------------------------------
+    // Inspector
+    //--------------------------------------------------
+
+    if let Some((pid, process, rx, tx)) = rows.get(selected) {
+
+        render_inspector(
+            frame,
+            layout[2],
+            *pid,
+            process,
+            &format_bytes(*rx),
+            &format_bytes(*tx),
+        );
+
+    } else {
+
+        frame.render_widget(
+            Paragraph::new("No process selected")
+                .block(
+                    Block::default()
+                        .title("Inspector")
+                        .borders(Borders::ALL),
+                ),
+            layout[2],
+        );
+
+    }
 
     //--------------------------------------------------
     // Footer
     //--------------------------------------------------
 
+    let footer = Paragraph::new(
+        "↑↓ Move    / Search    Esc Clear    q Quit",
+    )
+    .alignment(Alignment::Center)
+    .block(
+        Block::default()
+            .borders(Borders::ALL),
+    );
+
     frame.render_widget(
-        Paragraph::new(
-            "↑↓ Navigate    / Search    Enter Details    q Quit",
-        )
-        .alignment(Alignment::Center)
-        .block(Block::default().borders(Borders::ALL)),
-        layout[2],
+        footer,
+        layout[3],
     );
 }
