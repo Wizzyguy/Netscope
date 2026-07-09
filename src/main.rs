@@ -25,21 +25,27 @@ use crossterm::{
         EnterAlternateScreen,
         LeaveAlternateScreen,
     },
+    cursor::{Hide, Show},
 };
 
 use std::{
     collections::HashMap,
     io::stdout,
-    time::{Duration, Instant},
+    thread,
+    time::Duration,
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Terminal setup
+
     enable_raw_mode()?;
 
     let mut stdout = stdout();
 
-    execute!(stdout, EnterAlternateScreen)?;
+    execute!(
+        stdout,
+        EnterAlternateScreen,
+        Hide
+    )?;
 
     let backend = CrosstermBackend::new(stdout);
 
@@ -48,14 +54,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut search = String::new();
     let mut search_mode = false;
 
-    let mut last_refresh = Instant::now();
-
     loop {
-        // ----------------------------
-        // Keyboard
-        // ----------------------------
 
         match read_key() {
+
             KeyAction::Quit => break,
 
             KeyAction::Search => {
@@ -87,66 +89,60 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             KeyAction::None => {}
         }
 
-        // ----------------------------
-        // Refresh every 300 ms
-        // ----------------------------
+        let processes = discover_processes();
 
-        if last_refresh.elapsed() >= Duration::from_millis(300) {
+        let mut sockets = HashMap::new();
 
-            let processes = discover_processes();
-
-            let mut sockets = HashMap::new();
-
-            for process in &processes {
-                sockets.insert(
-                    process.pid,
-                    discover_socket_inodes(process.pid),
-                );
-            }
-
-            let usage = collect_per_process_usage(sockets);
-
-            let mut rows = Vec::new();
-
-            for process in processes {
-
-                if let Some((rx, tx)) = usage.get(&process.pid) {
-
-                    rows.push((
-                        process.pid,
-                        process.process_name,
-                        *rx,
-                        *tx,
-                    ));
-                }
-            }
-
-            rows = filter_idle(rows);
-
-            sort_rows(&mut rows);
-
-            if !search.is_empty() {
-                rows = filter_by_name(rows, &search);
-            }
-
-            terminal.draw(|frame| {
-                ui::render_dashboard(
-                    frame,
-                    &search,
-                    search_mode,
-                    &rows,
-                );
-            })?;
-
-            last_refresh = Instant::now();
+        for process in &processes {
+            sockets.insert(
+                process.pid,
+                discover_socket_inodes(process.pid),
+            );
         }
+
+        let usage = collect_per_process_usage(sockets);
+
+        let mut rows = Vec::new();
+
+        for process in processes {
+
+            if let Some((rx, tx)) = usage.get(&process.pid) {
+
+                rows.push((
+                    process.pid,
+                    process.process_name,
+                    *rx,
+                    *tx,
+                ));
+            }
+        }
+
+        rows = filter_idle(rows);
+
+        sort_rows(&mut rows);
+
+        if !search.is_empty() {
+            rows = filter_by_name(rows, &search);
+        }
+
+        terminal.draw(|frame| {
+            ui::render_dashboard(
+                frame,
+                &search,
+                search_mode,
+                &rows,
+            );
+        })?;
+
+        thread::sleep(Duration::from_millis(300));
     }
 
     disable_raw_mode()?;
 
     execute!(
         terminal.backend_mut(),
-        LeaveAlternateScreen,
+        Show,
+        LeaveAlternateScreen
     )?;
 
     terminal.show_cursor()?;
