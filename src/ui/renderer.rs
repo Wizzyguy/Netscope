@@ -1,4 +1,7 @@
-use crate::ui::format::format_bytes;
+use crate::ui::{
+    format::format_bytes,
+    stats::DashboardStats,
+};
 
 use ratatui::{
     prelude::*,
@@ -11,14 +14,16 @@ pub fn render_dashboard(
     search_mode: bool,
     rows: &Vec<(u32, String, u64, u64)>,
 ) {
+    let stats = DashboardStats::from_rows(rows, search);
+
+    // Main layout
     let layout = Layout::default()
         .direction(Direction::Vertical)
         .margin(1)
         .constraints([
-            Constraint::Length(3),
-            Constraint::Length(3),
-            Constraint::Min(10),
-            Constraint::Length(2),
+            Constraint::Length(3), // Header
+            Constraint::Min(10),   // Body
+            Constraint::Length(2), // Footer
         ])
         .split(frame.area());
 
@@ -26,17 +31,42 @@ pub fn render_dashboard(
     // Header
     //----------------------------------------
 
-    let title = Paragraph::new("NetScope")
+    let header = Paragraph::new("NetScope")
+        .alignment(Alignment::Center)
         .block(
             Block::default()
                 .title("NetScope")
                 .borders(Borders::ALL),
         );
 
-    frame.render_widget(title, layout[0]);
+    frame.render_widget(header, layout[0]);
 
     //----------------------------------------
-    // Search Box
+    // Split body
+    //----------------------------------------
+
+    let body = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage(72),
+            Constraint::Percentage(28),
+        ])
+        .split(layout[1]);
+
+    //----------------------------------------
+    // Left panel
+    //----------------------------------------
+
+    let left = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(3),
+            Constraint::Min(10),
+        ])
+        .split(body[0]);
+
+    //----------------------------------------
+    // Search
     //----------------------------------------
 
     let search_text = if search_mode {
@@ -54,10 +84,10 @@ pub fn render_dashboard(
                 .borders(Borders::ALL),
         );
 
-    frame.render_widget(search_widget, layout[1]);
+    frame.render_widget(search_widget, left[0]);
 
     //----------------------------------------
-    // Table
+    // Process Table
     //----------------------------------------
 
     let header = Row::new(vec![
@@ -66,7 +96,10 @@ pub fn render_dashboard(
         "RX",
         "TX",
     ])
-    .style(Style::default().add_modifier(Modifier::BOLD));
+    .style(
+        Style::default()
+            .add_modifier(Modifier::BOLD),
+    );
 
     let table_rows = rows.iter().map(|(pid, name, rx, tx)| {
         Row::new(vec![
@@ -81,9 +114,9 @@ pub fn render_dashboard(
         table_rows,
         [
             Constraint::Length(8),
-            Constraint::Percentage(50),
-            Constraint::Length(15),
-            Constraint::Length(15),
+            Constraint::Percentage(45),
+            Constraint::Length(14),
+            Constraint::Length(14),
         ],
     )
     .header(header)
@@ -93,16 +126,43 @@ pub fn render_dashboard(
             .borders(Borders::ALL),
     );
 
-    frame.render_widget(table, layout[2]);
+    frame.render_widget(table, left[1]);
+
+    //----------------------------------------
+    // Statistics Panel
+    //----------------------------------------
+
+    let stats_text = vec![
+        Line::from(format!("Processes : {}", stats.total_processes)),
+        Line::from(format!("Active    : {}", stats.active_processes)),
+        Line::from(""),
+        Line::from(format!("Download  : {}", stats.rx_string())),
+        Line::from(format!("Upload    : {}", stats.tx_string())),
+        Line::from(""),
+        Line::from(format!("Search    : {}", stats.search)),
+    ];
+
+    let stats_panel = Paragraph::new(stats_text)
+        .block(
+            Block::default()
+                .title("Statistics")
+                .borders(Borders::ALL),
+        );
+
+    frame.render_widget(stats_panel, body[1]);
 
     //----------------------------------------
     // Footer
     //----------------------------------------
 
     let footer = Paragraph::new(
-        "/ Search    Esc Cancel    Enter Apply    q Quit",
+        " q Quit   / Search   Esc Cancel   Enter Apply ",
     )
-    .block(Block::default().borders(Borders::ALL));
+    .alignment(Alignment::Center)
+    .block(
+        Block::default()
+            .borders(Borders::ALL),
+    );
 
-    frame.render_widget(footer, layout[3]);
+    frame.render_widget(footer, layout[2]);
 }
