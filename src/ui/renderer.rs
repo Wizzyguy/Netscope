@@ -1,7 +1,10 @@
-use crate::ui::{
-    format::format_bytes,
-    inspector::render_inspector,
-    stats::DashboardStats,
+use crate::{
+    collector::dashboard_controls::ProcessRow,
+    ui::{
+        format::format_bytes,
+        inspector::render_inspector,
+        stats::DashboardStats,
+    },
 };
 
 use ratatui::{
@@ -13,7 +16,7 @@ pub fn render_dashboard(
     frame: &mut Frame,
     search: &str,
     search_mode: bool,
-    rows: &Vec<(u32, String, u64, u64)>,
+    rows: &Vec<ProcessRow>,
     selected: usize,
 ) {
     let stats = DashboardStats::from_rows(rows, search);
@@ -26,10 +29,10 @@ pub fn render_dashboard(
         .direction(Direction::Vertical)
         .margin(1)
         .constraints([
-            Constraint::Length(3), // Header
-            Constraint::Min(10),   // Body
-            Constraint::Length(9), // Inspector
-            Constraint::Length(2), // Footer
+            Constraint::Length(3),
+            Constraint::Min(10),
+            Constraint::Length(9),
+            Constraint::Length(2),
         ])
         .split(frame.area());
 
@@ -72,7 +75,7 @@ pub fn render_dashboard(
         .split(body[0]);
 
     //--------------------------------------------------
-    // Search
+    // Search Box
     //--------------------------------------------------
 
     let search_text = if search_mode {
@@ -94,14 +97,16 @@ pub fn render_dashboard(
     );
 
     //--------------------------------------------------
-    // Table
+    // Process Table
     //--------------------------------------------------
 
     let header = Row::new(vec![
         "PID",
         "Process",
-        "RX",
-        "TX",
+        "RX Total",
+        "TX Total",
+        "RX/s",
+        "TX/s",
     ])
     .style(
         Style::default()
@@ -109,22 +114,28 @@ pub fn render_dashboard(
             .add_modifier(Modifier::BOLD),
     );
 
-    let table_rows = rows.iter().map(|(pid, name, rx, tx)| {
-        Row::new(vec![
-            pid.to_string(),
-            name.clone(),
-            format_bytes(*rx),
-            format_bytes(*tx),
-        ])
-    });
+    let table_rows = rows.iter().map(
+        |(pid, name, rx, tx, rx_speed, tx_speed)| {
+            Row::new(vec![
+                pid.to_string(),
+                name.clone(),
+                format_bytes(*rx),
+                format_bytes(*tx),
+                format!("{}/s", format_bytes(*rx_speed)),
+                format!("{}/s", format_bytes(*tx_speed)),
+            ])
+        },
+    );
 
     let table = Table::new(
         table_rows,
         [
-            Constraint::Length(8),
-            Constraint::Percentage(50),
-            Constraint::Length(15),
-            Constraint::Length(15),
+            Constraint::Length(7),
+            Constraint::Percentage(38),
+            Constraint::Length(14),
+            Constraint::Length(14),
+            Constraint::Length(12),
+            Constraint::Length(12),
         ],
     )
     .header(header)
@@ -154,7 +165,7 @@ pub fn render_dashboard(
     );
 
     //--------------------------------------------------
-    // Statistics
+    // Statistics Panel
     //--------------------------------------------------
 
     let stats_panel = Paragraph::new(vec![
@@ -196,8 +207,15 @@ pub fn render_dashboard(
     // Inspector
     //--------------------------------------------------
 
-    if let Some((pid, process, rx, tx)) = rows.get(selected) {
-
+    if let Some((
+        pid,
+        process,
+        rx,
+        tx,
+        rx_speed,
+        tx_speed,
+    )) = rows.get(selected)
+    {
         render_inspector(
             frame,
             layout[2],
@@ -205,10 +223,10 @@ pub fn render_dashboard(
             process,
             &format_bytes(*rx),
             &format_bytes(*tx),
+            &format!("{}/s", format_bytes(*rx_speed)),
+            &format!("{}/s", format_bytes(*tx_speed)),
         );
-
     } else {
-
         frame.render_widget(
             Paragraph::new("No process selected")
                 .block(
@@ -218,7 +236,6 @@ pub fn render_dashboard(
                 ),
             layout[2],
         );
-
     }
 
     //--------------------------------------------------
@@ -226,7 +243,7 @@ pub fn render_dashboard(
     //--------------------------------------------------
 
     let footer = Paragraph::new(
-        "↑↓ Move    / Search    Esc Clear    q Quit",
+        "↑↓ Move   / Search   D Download   U Upload   N Name   P PID   q Quit",
     )
     .alignment(Alignment::Center)
     .block(

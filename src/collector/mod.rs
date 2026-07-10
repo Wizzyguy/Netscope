@@ -13,6 +13,10 @@ pub use network_usage::collect_network_usage;
 pub mod per_process_throughput;
 pub use per_process_throughput::collect_per_process_usage;
 
+// NEW
+pub mod throughput;
+pub use throughput::ThroughputTracker;
+
 pub mod dashboard_controls;
 pub use dashboard_controls::{
     sort_rows,

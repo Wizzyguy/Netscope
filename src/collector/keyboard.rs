@@ -10,10 +10,6 @@ use std::time::Duration;
 pub enum KeyAction {
     None,
 
-    Quit,
-
-    Search,
-
     Character(char),
 
     Backspace,
@@ -26,31 +22,12 @@ pub enum KeyAction {
 
     Down,
     
-    SortDownload,
-
-    SortUpload,
-
-    SortName,
-
-    SortPid,
 }
 
 pub fn read_key() -> KeyAction {
     if event::poll(Duration::from_millis(10)).unwrap() {
         if let Event::Key(KeyEvent { code, .. }) = event::read().unwrap() {
             match code {
-		    KeyCode::Char('q') => KeyAction::Quit,
-
-		    KeyCode::Char('/') => KeyAction::Search,
-
-		    KeyCode::Char('d') => KeyAction::SortDownload,
-
-		    KeyCode::Char('u') => KeyAction::SortUpload,
-
-		    KeyCode::Char('n') => KeyAction::SortName,
-
-		    KeyCode::Char('p') => KeyAction::SortPid,
-
 		    KeyCode::Up => KeyAction::Up,
 
 		    KeyCode::Down => KeyAction::Down,

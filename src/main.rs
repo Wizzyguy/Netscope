@@ -8,7 +8,7 @@ use collector::{
     filter_by_name,
     filter_idle,
     read_key,
-    sort_rows,
+    ThroughputTracker,
     KeyAction,
 };
 
@@ -38,9 +38,9 @@ use std::{
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    //-------------------------------------------------------
+    //--------------------------------------------------------
     // Terminal Setup
-    //-------------------------------------------------------
+    //--------------------------------------------------------
 
     enable_raw_mode()?;
 
@@ -56,22 +56,35 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut terminal = Terminal::new(backend)?;
 
-    //-------------------------------------------------------
+    //--------------------------------------------------------
     // Application State
-    //-------------------------------------------------------
+    //--------------------------------------------------------
 
     let mut app = App::new();
 
-    //-------------------------------------------------------
+    let mut tracker = ThroughputTracker::new();
+
+    //--------------------------------------------------------
     // Main Loop
-    //-------------------------------------------------------
+    //--------------------------------------------------------
 
     loop {
-        //---------------------------------------------------
+        //----------------------------------------------------
         // Discover Processes
-        //---------------------------------------------------
+        //----------------------------------------------------
 
         let processes = discover_processes();
+
+        let active_pids: Vec<u32> =
+            processes.iter()
+                .map(|p| p.pid)
+                .collect();
+
+        tracker.cleanup(&active_pids);
+
+        //----------------------------------------------------
+        // Discover Sockets
+        //----------------------------------------------------
 
         let mut sockets = HashMap::new();
 
@@ -82,54 +95,86 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             );
         }
 
-        //---------------------------------------------------
-        // Collect Network Usage
-        //---------------------------------------------------
+        //----------------------------------------------------
+        // Collect Usage
+        //----------------------------------------------------
 
         let usage = collect_per_process_usage(sockets);
 
         let mut rows = Vec::new();
 
         for process in processes {
-            if let Some((rx, tx)) = usage.get(&process.pid) {
+
+            if let Some((rx, tx)) =
+                usage.get(&process.pid)
+            {
+                let (rx_speed, tx_speed) =
+                    tracker.calculate(
+                        process.pid,
+                        *rx,
+                        *tx,
+                    );
+
                 rows.push((
                     process.pid,
                     process.process_name,
                     *rx,
                     *tx,
+                    rx_speed,
+                    tx_speed,
                 ));
             }
         }
 
-        //---------------------------------------------------
-        // Remove idle processes
-        //---------------------------------------------------
+        //----------------------------------------------------
+        // Remove Idle Processes
+        //----------------------------------------------------
 
         rows = filter_idle(rows);
 
-        //---------------------------------------------------
-        // Temporary sorting
-        //---------------------------------------------------
+        //----------------------------------------------------
+        // Sorting
+        //----------------------------------------------------
 
-        sort_rows(&mut rows);
+        match app.sort {
 
-        //---------------------------------------------------
-        // Search filtering
-        //---------------------------------------------------
+            SortMode::Download => {
+                rows.sort_by(|a, b| b.2.cmp(&a.2));
+            }
+
+            SortMode::Upload => {
+                rows.sort_by(|a, b| b.3.cmp(&a.3));
+            }
+
+            SortMode::Name => {
+                rows.sort_by(|a, b|
+                    a.1.to_lowercase()
+                        .cmp(&b.1.to_lowercase())
+                );
+            }
+
+            SortMode::Pid => {
+                rows.sort_by(|a, b| a.0.cmp(&b.0));
+            }
+        }
+
+        //----------------------------------------------------
+        // Search
+        //----------------------------------------------------
 
         if !app.search.is_empty() {
             rows = filter_by_name(rows, &app.search);
         }
 
-        //---------------------------------------------------
-        // Keep selected row valid
-        //---------------------------------------------------
+        //----------------------------------------------------
+        // Keep Selection Valid
+        //----------------------------------------------------
 
         app.ensure_valid(rows.len());
 
-        //---------------------------------------------------
-        // Draw UI
-        //---------------------------------------------------
+        //----------------------------------------------------
+        // Draw Dashboard
+        //----------------------------------------------------
 
         terminal.draw(|frame| {
             ui::render_dashboard(
@@ -141,25 +186,47 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             );
         })?;
 
-        //---------------------------------------------------
-        // Keyboard
-        //---------------------------------------------------
+        //----------------------------------------------------
+        // Keyboard Input
+        //----------------------------------------------------
 
         match read_key() {
-            KeyAction::Quit => break,
-
-            //-----------------------------------------------
-            // Search
-            //-----------------------------------------------
-
-            KeyAction::Search => {
-                app.search_mode = true;
-                app.search.clear();
-            }
 
             KeyAction::Character(c) => {
+
                 if app.search_mode {
+
                     app.search.push(c);
+
+                } else {
+
+                    match c {
+
+                        '/' => {
+                            app.search_mode = true;
+                            app.search.clear();
+                        }
+
+                        'q' => break,
+
+                        'd' => {
+                            app.sort = SortMode::Download;
+                        }
+
+                        'u' => {
+                            app.sort = SortMode::Upload;
+                        }
+
+                        'n' => {
+                            app.sort = SortMode::Name;
+                        }
+
+                        'p' => {
+                            app.sort = SortMode::Pid;
+                        }
+
+                        _ => {}
+                    }
                 }
             }
 
@@ -178,10 +245,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 app.search.clear();
             }
 
-            //-----------------------------------------------
-            // Navigation
-            //-----------------------------------------------
-
             KeyAction::Up => {
                 app.previous();
             }
@@ -190,37 +253,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 app.next(rows.len());
             }
 
-            //-----------------------------------------------
-            // Sort Modes (state only for now)
-            //-----------------------------------------------
-
-            KeyAction::SortDownload => {
-                app.sort = SortMode::Download;
-            }
-
-            KeyAction::SortUpload => {
-                app.sort = SortMode::Upload;
-            }
-
-            KeyAction::SortName => {
-                app.sort = SortMode::Name;
-            }
-
-            KeyAction::SortPid => {
-                app.sort = SortMode::Pid;
-            }
-
-            //-----------------------------------------------
-
             KeyAction::None => {}
         }
+
+        //----------------------------------------------------
+        // Refresh
+        //----------------------------------------------------
 
         thread::sleep(Duration::from_millis(100));
     }
 
-    //-------------------------------------------------------
+    //--------------------------------------------------------
     // Restore Terminal
-    //-------------------------------------------------------
+    //--------------------------------------------------------
 
     disable_raw_mode()?;
 

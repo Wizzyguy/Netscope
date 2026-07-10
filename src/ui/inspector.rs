@@ -10,25 +10,26 @@ pub fn render_inspector(
     process: &str,
     rx: &str,
     tx: &str,
+    rx_speed: &str,
+    tx_speed: &str,
 ) {
     let text = vec![
-        Line::from(format!("PID        : {}", pid)),
-        Line::from(format!("Process    : {}", process)),
+        Line::from(format!("PID       : {}", pid)),
+        Line::from(format!("Process   : {}", process)),
         Line::from(""),
-        Line::from(format!("Download   : {}", rx)),
-        Line::from(format!("Upload     : {}", tx)),
+        Line::from(format!("RX Total  : {}", rx)),
+        Line::from(format!("TX Total  : {}", tx)),
         Line::from(""),
-        Line::from("Memory      : Coming Soon"),
-        Line::from("Executable  : Coming Soon"),
-        Line::from("Sockets     : Coming Soon"),
+        Line::from(format!("RX Speed  : {}", rx_speed)),
+        Line::from(format!("TX Speed  : {}", tx_speed)),
     ];
 
-    let widget = Paragraph::new(text)
+    let panel = Paragraph::new(text)
         .block(
             Block::default()
                 .title("Inspector")
                 .borders(Borders::ALL),
         );
 
-    frame.render_widget(widget, area);
+    frame.render_widget(panel, area);
 }
