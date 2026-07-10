@@ -6,5 +6,5 @@ pub mod renderer;
 pub mod stats;
 pub mod inspector;
 
-pub use app::App;
+pub use app::{App, SortMode};
 pub use renderer::render_dashboard;

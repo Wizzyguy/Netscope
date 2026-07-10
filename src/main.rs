@@ -12,7 +12,7 @@ use collector::{
     KeyAction,
 };
 
-use ui::App;
+use ui::{App, SortMode};
 
 use crossterm::{
     cursor::{Hide, Show},
@@ -25,7 +25,10 @@ use crossterm::{
     },
 };
 
-use ratatui::{backend::CrosstermBackend, Terminal};
+use ratatui::{
+    backend::CrosstermBackend,
+    Terminal,
+};
 
 use std::{
     collections::HashMap,
@@ -35,9 +38,9 @@ use std::{
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // ----------------------------------------
-    // Terminal setup
-    // ----------------------------------------
+    //-------------------------------------------------------
+    // Terminal Setup
+    //-------------------------------------------------------
 
     enable_raw_mode()?;
 
@@ -53,15 +56,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut terminal = Terminal::new(backend)?;
 
+    //-------------------------------------------------------
+    // Application State
+    //-------------------------------------------------------
+
     let mut app = App::new();
 
-    let mut search = String::new();
-    let mut search_mode = false;
+    //-------------------------------------------------------
+    // Main Loop
+    //-------------------------------------------------------
 
     loop {
-        //----------------------------------------
-        // Collect processes
-        //----------------------------------------
+        //---------------------------------------------------
+        // Discover Processes
+        //---------------------------------------------------
 
         let processes = discover_processes();
 
@@ -73,6 +81,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 discover_socket_inodes(process.pid),
             );
         }
+
+        //---------------------------------------------------
+        // Collect Network Usage
+        //---------------------------------------------------
 
         let usage = collect_per_process_usage(sockets);
 
@@ -89,62 +101,86 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
 
+        //---------------------------------------------------
+        // Remove idle processes
+        //---------------------------------------------------
+
         rows = filter_idle(rows);
+
+        //---------------------------------------------------
+        // Temporary sorting
+        //---------------------------------------------------
 
         sort_rows(&mut rows);
 
-        if !search.is_empty() {
-            rows = filter_by_name(rows, &search);
+        //---------------------------------------------------
+        // Search filtering
+        //---------------------------------------------------
+
+        if !app.search.is_empty() {
+            rows = filter_by_name(rows, &app.search);
         }
+
+        //---------------------------------------------------
+        // Keep selected row valid
+        //---------------------------------------------------
 
         app.ensure_valid(rows.len());
 
-        //----------------------------------------
+        //---------------------------------------------------
         // Draw UI
-        //----------------------------------------
+        //---------------------------------------------------
 
         terminal.draw(|frame| {
             ui::render_dashboard(
                 frame,
-                &search,
-                search_mode,
+                &app.search,
+                app.search_mode,
                 &rows,
-		app.selected
+                app.selected,
             );
         })?;
 
-        //----------------------------------------
+        //---------------------------------------------------
         // Keyboard
-        //----------------------------------------
+        //---------------------------------------------------
 
         match read_key() {
             KeyAction::Quit => break,
 
+            //-----------------------------------------------
+            // Search
+            //-----------------------------------------------
+
             KeyAction::Search => {
-                search_mode = true;
-                search.clear();
+                app.search_mode = true;
+                app.search.clear();
             }
 
             KeyAction::Character(c) => {
-                if search_mode {
-                    search.push(c);
+                if app.search_mode {
+                    app.search.push(c);
                 }
             }
 
             KeyAction::Backspace => {
-                if search_mode {
-                    search.pop();
+                if app.search_mode {
+                    app.search.pop();
                 }
             }
 
             KeyAction::Enter => {
-                search_mode = false;
+                app.search_mode = false;
             }
 
             KeyAction::Esc => {
-                search_mode = false;
-                search.clear();
+                app.search_mode = false;
+                app.search.clear();
             }
+
+            //-----------------------------------------------
+            // Navigation
+            //-----------------------------------------------
 
             KeyAction::Up => {
                 app.previous();
@@ -154,15 +190,37 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 app.next(rows.len());
             }
 
+            //-----------------------------------------------
+            // Sort Modes (state only for now)
+            //-----------------------------------------------
+
+            KeyAction::SortDownload => {
+                app.sort = SortMode::Download;
+            }
+
+            KeyAction::SortUpload => {
+                app.sort = SortMode::Upload;
+            }
+
+            KeyAction::SortName => {
+                app.sort = SortMode::Name;
+            }
+
+            KeyAction::SortPid => {
+                app.sort = SortMode::Pid;
+            }
+
+            //-----------------------------------------------
+
             KeyAction::None => {}
         }
 
         thread::sleep(Duration::from_millis(100));
     }
 
-    //----------------------------------------
-    // Restore terminal
-    //----------------------------------------
+    //-------------------------------------------------------
+    // Restore Terminal
+    //-------------------------------------------------------
 
     disable_raw_mode()?;
 

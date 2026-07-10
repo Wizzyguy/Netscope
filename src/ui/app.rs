@@ -1,11 +1,24 @@
+pub enum SortMode {
+    Download,
+    Upload,
+    Name,
+    Pid,
+}
+
 pub struct App {
     pub selected: usize,
+    pub search: String,
+    pub search_mode: bool,
+    pub sort: SortMode,
 }
 
 impl App {
     pub fn new() -> Self {
         Self {
             selected: 0,
+            search: String::new(),
+            search_mode: false,
+            sort: SortMode::Download,
         }
     }
 
