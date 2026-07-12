@@ -2,14 +2,9 @@ mod collector;
 mod ui;
 
 use collector::{
-    collect_per_process_usage,
-    discover_processes,
-    discover_socket_inodes,
-    filter_by_name,
-    filter_idle,
-    read_key,
+    collect_per_process_usage, discover_processes, discover_socket_inodes, filter_by_name,
+    filter_idle, read_key, read_process_cpu, read_process_memory, CpuTracker, KeyAction,
     ThroughputTracker,
-    KeyAction,
 };
 
 use ui::{App, SortMode};
@@ -17,25 +12,12 @@ use ui::{App, SortMode};
 use crossterm::{
     cursor::{Hide, Show},
     execute,
-    terminal::{
-        disable_raw_mode,
-        enable_raw_mode,
-        EnterAlternateScreen,
-        LeaveAlternateScreen,
-    },
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 
-use ratatui::{
-    backend::CrosstermBackend,
-    Terminal,
-};
+use ratatui::{backend::CrosstermBackend, Terminal};
 
-use std::{
-    collections::HashMap,
-    io::stdout,
-    thread,
-    time::Duration,
-};
+use std::{collections::HashMap, io::stdout, thread, time::Duration};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     //--------------------------------------------------------
@@ -46,11 +28,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut stdout = stdout();
 
-    execute!(
-        stdout,
-        EnterAlternateScreen,
-        Hide,
-    )?;
+    execute!(stdout, EnterAlternateScreen, Hide,)?;
 
     let backend = CrosstermBackend::new(stdout);
 
@@ -64,6 +42,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut tracker = ThroughputTracker::new();
 
+    let mut cpu_tracker = CpuTracker::new();
+
     //--------------------------------------------------------
     // Main Loop
     //--------------------------------------------------------
@@ -75,12 +55,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let processes = discover_processes();
 
-        let active_pids: Vec<u32> =
-            processes.iter()
-                .map(|p| p.pid)
-                .collect();
+        let active_pids: Vec<u32> = processes.iter().map(|p| p.pid).collect();
 
         tracker.cleanup(&active_pids);
+        cpu_tracker.cleanup(&active_pids);
 
         //----------------------------------------------------
         // Discover Sockets
@@ -89,14 +67,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut sockets = HashMap::new();
 
         for process in &processes {
-            sockets.insert(
-                process.pid,
-                discover_socket_inodes(process.pid),
-            );
+            sockets.insert(process.pid, discover_socket_inodes(process.pid));
         }
 
         //----------------------------------------------------
-        // Collect Usage
+        // Collect Network Usage
         //----------------------------------------------------
 
         let usage = collect_per_process_usage(sockets);
@@ -104,20 +79,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut rows = Vec::new();
 
         for process in processes {
+            if let Some((rx, tx)) = usage.get(&process.pid) {
+                let (rx_speed, tx_speed) = tracker.calculate(process.pid, *rx, *tx);
 
-            if let Some((rx, tx)) =
-                usage.get(&process.pid)
-            {
-                let (rx_speed, tx_speed) =
-                    tracker.calculate(
-                        process.pid,
-                        *rx,
-                        *tx,
-                    );
+                let cpu_ticks = read_process_cpu(process.pid).unwrap_or(0);
+
+                let cpu = cpu_tracker.calculate(process.pid, cpu_ticks);
+
+                let memory = read_process_memory(process.pid).unwrap_or(0);
 
                 rows.push((
                     process.pid,
                     process.process_name,
+                    memory,
+                    cpu,
                     *rx,
                     *tx,
                     rx_speed,
@@ -137,20 +112,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         //----------------------------------------------------
 
         match app.sort {
-
             SortMode::Download => {
-                rows.sort_by(|a, b| b.2.cmp(&a.2));
+                rows.sort_by(|a, b| b.4.cmp(&a.4));
             }
 
             SortMode::Upload => {
-                rows.sort_by(|a, b| b.3.cmp(&a.3));
+                rows.sort_by(|a, b| b.5.cmp(&a.5));
             }
 
             SortMode::Name => {
-                rows.sort_by(|a, b|
-                    a.1.to_lowercase()
-                        .cmp(&b.1.to_lowercase())
-                );
+                rows.sort_by(|a, b| a.1.to_lowercase().cmp(&b.1.to_lowercase()));
             }
 
             SortMode::Pid => {
@@ -177,31 +148,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         //----------------------------------------------------
 
         terminal.draw(|frame| {
-            ui::render_dashboard(
-                frame,
-                &app.search,
-                app.search_mode,
-                &rows,
-                app.selected,
-            );
+            ui::render_dashboard(frame, &app.search, app.search_mode, &rows, app.selected);
         })?;
 
         //----------------------------------------------------
-        // Keyboard Input
+        // Keyboard
         //----------------------------------------------------
 
         match read_key() {
-
             KeyAction::Character(c) => {
-
                 if app.search_mode {
-
                     app.search.push(c);
-
                 } else {
-
                     match c {
-
                         '/' => {
                             app.search_mode = true;
                             app.search.clear();
@@ -209,21 +168,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                         'q' => break,
 
-                        'd' => {
-                            app.sort = SortMode::Download;
-                        }
+                        'd' => app.sort = SortMode::Download,
 
-                        'u' => {
-                            app.sort = SortMode::Upload;
-                        }
+                        'u' => app.sort = SortMode::Upload,
 
-                        'n' => {
-                            app.sort = SortMode::Name;
-                        }
+                        'n' => app.sort = SortMode::Name,
 
-                        'p' => {
-                            app.sort = SortMode::Pid;
-                        }
+                        'p' => app.sort = SortMode::Pid,
 
                         _ => {}
                     }
@@ -245,13 +196,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 app.search.clear();
             }
 
-            KeyAction::Up => {
-                app.previous();
-            }
+            KeyAction::Up => app.previous(),
 
-            KeyAction::Down => {
-                app.next(rows.len());
-            }
+            KeyAction::Down => app.next(rows.len()),
 
             KeyAction::None => {}
         }
@@ -269,11 +216,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     disable_raw_mode()?;
 
-    execute!(
-        terminal.backend_mut(),
-        Show,
-        LeaveAlternateScreen,
-    )?;
+    execute!(terminal.backend_mut(), Show, LeaveAlternateScreen,)?;
 
     terminal.show_cursor()?;
 
