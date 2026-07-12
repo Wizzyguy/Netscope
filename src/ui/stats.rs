@@ -9,21 +9,17 @@ pub struct DashboardStats {
 }
 
 impl DashboardStats {
-    pub fn from_rows(
-        rows: &Vec<ProcessRow>,
-        search: &str,
-    ) -> Self {
-        let total_rx = rows.iter().map(|r| r.2).sum();
-
-        let total_tx = rows.iter().map(|r| r.3).sum();
-
+    pub fn from_rows(rows: &Vec<ProcessRow>, search: &str) -> Self {
         Self {
             total_processes: rows.len(),
             active_processes: rows.len(),
-            total_rx,
-            total_tx,
+
+            total_rx: rows.iter().map(|r| r.4).sum(),
+
+            total_tx: rows.iter().map(|r| r.5).sum(),
+
             search: if search.is_empty() {
-                "None".to_string()
+                "None".into()
             } else {
                 search.to_string()
             },
@@ -31,28 +27,10 @@ impl DashboardStats {
     }
 
     pub fn rx_string(&self) -> String {
-        format_bytes(self.total_rx)
+        crate::ui::format::format_bytes(self.total_rx)
     }
 
     pub fn tx_string(&self) -> String {
-        format_bytes(self.total_tx)
-    }
-}
-
-fn format_bytes(bytes: u64) -> String {
-    const KB: f64 = 1024.0;
-    const MB: f64 = KB * 1024.0;
-    const GB: f64 = MB * 1024.0;
-
-    let b = bytes as f64;
-
-    if b >= GB {
-        format!("{:.2} GB", b / GB)
-    } else if b >= MB {
-        format!("{:.2} MB", b / MB)
-    } else if b >= KB {
-        format!("{:.2} KB", b / KB)
-    } else {
-        format!("{} B", bytes)
+        crate::ui::format::format_bytes(self.total_tx)
     }
 }

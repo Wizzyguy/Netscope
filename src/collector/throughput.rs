@@ -19,27 +19,14 @@ impl ThroughputTracker {
     ///
     /// Returns:
     /// (download_speed, upload_speed)
-    pub fn calculate(
-        &mut self,
-        pid: u32,
-        rx: u64,
-        tx: u64,
-    ) -> (u64, u64) {
-
-        let (old_rx, old_tx) = self
-            .previous
-            .get(&pid)
-            .copied()
-            .unwrap_or((rx, tx));
+    pub fn calculate(&mut self, pid: u32, rx: u64, tx: u64) -> (u64, u64) {
+        let (old_rx, old_tx) = self.previous.get(&pid).copied().unwrap_or((rx, tx));
 
         let rx_speed = rx.saturating_sub(old_rx);
 
         let tx_speed = tx.saturating_sub(old_tx);
 
-        self.previous.insert(
-            pid,
-            (rx, tx),
-        );
+        self.previous.insert(pid, (rx, tx));
 
         (rx_speed, tx_speed)
     }
@@ -47,12 +34,8 @@ impl ThroughputTracker {
     /// Remove stale processes.
     ///
     /// Prevents memory growth when processes terminate.
-    pub fn cleanup(
-        &mut self,
-        active_pids: &[u32],
-    ) {
-        self.previous
-            .retain(|pid, _| active_pids.contains(pid));
+    pub fn cleanup(&mut self, active_pids: &[u32]) {
+        self.previous.retain(|pid, _| active_pids.contains(pid));
     }
 
     /// Clears all stored history.

@@ -18,17 +18,19 @@ pub mod throughput;
 pub use throughput::ThroughputTracker;
 
 pub mod dashboard_controls;
-pub use dashboard_controls::{
-    sort_rows,
-    filter_idle,
-    filter_by_name,
-};
+pub use dashboard_controls::{filter_by_name, filter_idle, sort_rows};
 
 pub mod keyboard;
-pub use keyboard::{
-    KeyAction,
-    read_key,
-};
+pub use keyboard::{read_key, KeyAction};
 
 pub mod models;
 pub use models::ProcessInfo;
+
+pub mod cpu_usage;
+pub use cpu_usage::read_process_cpu;
+
+pub mod memory_usage;
+pub use memory_usage::read_process_memory;
+
+pub mod cpu_tracker;
+pub use cpu_tracker::CpuTracker;
