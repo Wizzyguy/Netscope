@@ -1,50 +1,119 @@
 use std::collections::HashMap;
 
-/// Tracks previous RX/TX totals for every process.
-///
-/// Used to calculate live throughput (bytes per refresh).
+/// Stores all runtime statistics for a process.
+#[derive(Clone, Copy)]
+struct ThroughputState {
+    previous_rx: u64,
+    previous_tx: u64,
+
+    session_rx: u64,
+    session_tx: u64,
+}
+
+/// Tracks live throughput and cumulative session usage.
 pub struct ThroughputTracker {
-    previous: HashMap<u32, (u64, u64)>,
+    processes: HashMap<u32, ThroughputState>,
 }
 
 impl ThroughputTracker {
-    /// Create a new throughput tracker.
+    /// Create a new tracker.
     pub fn new() -> Self {
         Self {
-            previous: HashMap::new(),
+            processes: HashMap::new(),
         }
     }
 
-    /// Calculate the current throughput for a process.
+    /// Calculates:
     ///
-    /// Returns:
-    /// (download_speed, upload_speed)
-    pub fn calculate(&mut self, pid: u32, rx: u64, tx: u64) -> (u64, u64) {
-        let (old_rx, old_tx) = self.previous.get(&pid).copied().unwrap_or((rx, tx));
+    /// (RX/s, TX/s, Session RX, Session TX)
+    pub fn calculate(
+        &mut self,
+        pid: u32,
+        rx_total: u64,
+        tx_total: u64,
+    ) -> (u64, u64, u64, u64) {
+        let state = self.processes.entry(pid).or_insert(
+            ThroughputState {
+                previous_rx: rx_total,
+                previous_tx: tx_total,
 
-        let rx_speed = rx.saturating_sub(old_rx);
+                session_rx: 0,
+                session_tx: 0,
+            },
+        );
 
-        let tx_speed = tx.saturating_sub(old_tx);
+        //----------------------------------------------------
+        // Live throughput
+        //----------------------------------------------------
 
-        self.previous.insert(pid, (rx, tx));
+        let rx_speed = rx_total.saturating_sub(state.previous_rx);
 
-        (rx_speed, tx_speed)
+        let tx_speed = tx_total.saturating_sub(state.previous_tx);
+
+        //----------------------------------------------------
+        // Update session totals
+        //----------------------------------------------------
+
+        state.session_rx += rx_speed;
+        state.session_tx += tx_speed;
+
+        //----------------------------------------------------
+        // Store latest counters
+        //----------------------------------------------------
+
+        state.previous_rx = rx_total;
+        state.previous_tx = tx_total;
+
+        (
+            rx_speed,
+            tx_speed,
+            state.session_rx,
+            state.session_tx,
+        )
     }
 
-    /// Remove stale processes.
-    ///
-    /// Prevents memory growth when processes terminate.
-    pub fn cleanup(&mut self, active_pids: &[u32]) {
-        self.previous.retain(|pid, _| active_pids.contains(pid));
+    /// Remove dead processes.
+    pub fn cleanup(
+        &mut self,
+        active_pids: &[u32],
+    ) {
+        self.processes
+            .retain(|pid, _| active_pids.contains(pid));
     }
 
-    /// Clears all stored history.
+    /// Reset every accumulated session total.
     pub fn reset(&mut self) {
-        self.previous.clear();
+        self.processes.clear();
+    }
+
+    /// Reset a single process.
+    pub fn reset_process(&mut self, pid: u32) {
+        self.processes.remove(&pid);
     }
 
     /// Number of tracked processes.
     pub fn tracked_processes(&self) -> usize {
-        self.previous.len()
+        self.processes.len()
+    }
+
+    /// Total cumulative download since NetScope started.
+    pub fn total_session_rx(&self) -> u64 {
+        self.processes
+            .values()
+            .map(|p| p.session_rx)
+            .sum()
+    }
+
+    /// Total cumulative upload since NetScope started.
+    pub fn total_session_tx(&self) -> u64 {
+        self.processes
+            .values()
+            .map(|p| p.session_tx)
+            .sum()
+    }
+
+    /// Total cumulative traffic.
+    pub fn total_session_usage(&self) -> u64 {
+        self.total_session_rx() + self.total_session_tx()
     }
 }

@@ -1,22 +1,52 @@
-use crate::collector::dashboard_controls::ProcessRow;
+use crate::collector::ProcessSession;
 
 pub struct DashboardStats {
     pub total_processes: usize,
     pub active_processes: usize,
-    pub total_rx: u64,
-    pub total_tx: u64,
+
+    pub session_download: u64,
+    pub session_upload: u64,
+
+    pub cumulative_process_usage: u64,
+
     pub search: String,
 }
 
 impl DashboardStats {
-    pub fn from_rows(rows: &Vec<ProcessRow>, search: &str) -> Self {
+    pub fn from_rows(
+        rows: &Vec<ProcessSession>,
+        search: &str,
+    ) -> Self {
+        let total_processes = rows.len();
+
+        let active_processes = rows
+            .iter()
+            .filter(|row| {
+                row.rx_speed > 0
+                    || row.tx_speed > 0
+                    || row.cpu > 0.1
+            })
+            .count();
+
+        let session_download =
+            rows.iter().map(|r| r.session_rx).sum();
+
+        let session_upload =
+            rows.iter().map(|r| r.session_tx).sum();
+
+        let cumulative_process_usage =
+            rows.iter().map(|r| r.total_process()).sum();
+
         Self {
-            total_processes: rows.len(),
-            active_processes: rows.len(),
+            total_processes,
 
-            total_rx: rows.iter().map(|r| r.4).sum(),
+            active_processes,
 
-            total_tx: rows.iter().map(|r| r.5).sum(),
+            session_download,
+
+            session_upload,
+
+            cumulative_process_usage,
 
             search: if search.is_empty() {
                 "None".into()
@@ -26,11 +56,7 @@ impl DashboardStats {
         }
     }
 
-    pub fn rx_string(&self) -> String {
-        crate::ui::format::format_bytes(self.total_rx)
-    }
-
-    pub fn tx_string(&self) -> String {
-        crate::ui::format::format_bytes(self.total_tx)
+    pub fn total_session(&self) -> u64 {
+        self.session_download + self.session_upload
     }
 }
