@@ -26,13 +26,13 @@ pub struct App {
     //--------------------------------------------------
 
     pub selected: usize,
+    pub selected_pid: Option<u32>,
 
     //--------------------------------------------------
     // Search
     //--------------------------------------------------
 
     pub search: String,
-
     pub search_mode: bool,
 
     //--------------------------------------------------
@@ -46,7 +46,6 @@ pub struct App {
     //--------------------------------------------------
 
     pub total_download: u64,
-
     pub total_upload: u64,
 
     //--------------------------------------------------
@@ -62,6 +61,7 @@ impl App {
             workspace: Workspace::Dashboard,
 
             selected: 0,
+            selected_pid: None,
 
             search: String::new(),
             search_mode: false,
@@ -132,6 +132,31 @@ impl App {
             self.selected = 0;
         } else if self.selected >= len {
             self.selected = len - 1;
+        }
+    }
+
+    //--------------------------------------------------
+    // Selection Persistence
+    //--------------------------------------------------
+
+    pub fn remember_selection(
+        &mut self,
+        pid: Option<u32>,
+    ) {
+        self.selected_pid = pid;
+    }
+
+    pub fn restore_selection(
+        &mut self,
+        rows: &[crate::collector::ProcessSession],
+    ) {
+        if let Some(pid) = self.selected_pid {
+            if let Some(index) = rows
+                .iter()
+                .position(|row| row.pid == pid)
+            {
+                self.selected = index;
+            }
         }
     }
 

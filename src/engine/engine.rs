@@ -11,6 +11,7 @@ use super::{
     BandwidthEngine,
     ConnectionEngine,
     CpuEngine,
+    DashboardCache,
     MemoryEngine,
     SessionEngine,
 };
@@ -31,22 +32,20 @@ pub struct Engine {
     //----------------------------------------------------
 
     dashboard: Vec<ProcessSession>,
+    cache: DashboardCache,
 }
 
 impl Engine {
     pub fn new() -> Self {
         Self {
             bandwidth: BandwidthEngine::new(),
-
             cpu: CpuEngine::new(),
-
             memory: MemoryEngine::new(),
-
             session: SessionEngine::new(),
-
             connection: ConnectionEngine::new(),
 
             dashboard: Vec::new(),
+            cache: DashboardCache::new(),
         }
     }
 
@@ -69,11 +68,8 @@ impl Engine {
             processes.iter().map(|p| p.pid).collect();
 
         self.bandwidth.cleanup(&active);
-
         self.cpu.cleanup(&active);
-
         self.memory.cleanup(&active);
-
         self.session.cleanup(&active);
 
         //------------------------------------------------
@@ -81,23 +77,20 @@ impl Engine {
         //------------------------------------------------
 
         for process in processes {
-
-            let (rx, tx) =
-                usage
-                    .get(&process.pid)
-                    .copied()
-                    .unwrap_or((0, 0));
+            let (rx, tx) = usage
+                .get(&process.pid)
+                .copied()
+                .unwrap_or((0, 0));
 
             //------------------------------------------------
             // Update Engines
             //------------------------------------------------
 
-            self.bandwidth
-                .update_process(
-                    process.pid,
-                    rx,
-                    tx,
-                );
+            self.bandwidth.update_process(
+                process.pid,
+                rx,
+                tx,
+            );
 
             let cpu_ticks =
                 read_process_cpu(process.pid)
@@ -105,9 +98,7 @@ impl Engine {
 
             self.cpu.update(process.pid);
 
-            self.memory.update(
-                process.pid,
-            );
+            self.memory.update(process.pid);
 
             self.session.update(
                 process.pid,
@@ -120,54 +111,49 @@ impl Engine {
             //------------------------------------------------
 
             let (speed_rx, speed_tx) =
-                self.bandwidth
-                    .process_speed(process.pid);
+                self.bandwidth.process_speed(process.pid);
 
             let (session_rx, session_tx) =
-                self.session
-                    .process(process.pid);
+                self.session.process(process.pid);
 
             let (total_rx, total_tx) =
-                self.bandwidth
-                    .process_total(process.pid);
+                self.bandwidth.process_total(process.pid);
 
             let cpu =
-                self.cpu
-                    .value(process.pid);
+                self.cpu.value(process.pid);
 
             let memory =
-                self.memory
-                    .value(process.pid);
+                self.memory.value(process.pid);
 
             //------------------------------------------------
             // Dashboard Row
             //------------------------------------------------
 
-            self.dashboard.push(
-                ProcessSession {
+            self.dashboard.push(ProcessSession {
+                pid: process.pid,
+                name: process.process_name,
 
-                    pid: process.pid,
+                memory,
+                cpu,
 
-                    name: process.process_name,
+                rx_total: total_rx,
+                tx_total: total_tx,
 
-                    memory,
+                rx_speed: speed_rx,
+                tx_speed: speed_tx,
 
-                    cpu,
-
-                    rx_total: total_rx,
-
-                    tx_total: total_tx,
-
-                    rx_speed: speed_rx,
-
-                    tx_speed: speed_tx,
-
-                    session_rx,
-
-                    session_tx,
-                }
-            );
+                session_rx,
+                session_tx,
+            });
         }
+
+        //------------------------------------------------
+        // Update Dashboard Cache
+        //------------------------------------------------
+
+        self.cache.update(self.dashboard.clone());
+
+        self.dashboard = self.cache.rows();
 
         //------------------------------------------------
         // Refresh Connections
@@ -185,9 +171,7 @@ impl Engine {
     pub fn dashboard(
         &self,
     ) -> &Vec<ProcessSession> {
-
         &self.dashboard
-
     }
 
     //----------------------------------------------------
@@ -197,9 +181,7 @@ impl Engine {
     pub fn connections(
         &self,
     ) -> &Vec<crate::collector::ConnectionInfo> {
-
         self.connection.connections()
-
     }
 
     //----------------------------------------------------
@@ -210,16 +192,14 @@ impl Engine {
         &mut self,
     ) {
         self.bandwidth.reset();
-
         self.cpu.reset();
-
         self.memory.reset();
-
         self.session.reset();
 
         // Uncomment this if ConnectionEngine gets a clear() method.
         // self.connection.clear();
 
         self.dashboard.clear();
+        self.cache.clear();
     }
 }
