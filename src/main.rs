@@ -117,6 +117,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             processes,
             usage,
         );
+        
+        //----------------------------------------------------
+        // Event Timeline
+        //----------------------------------------------------
 
         //----------------------------------------------------
         // Dashboard Cache
@@ -128,7 +132,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Remove Idle Processes
         //----------------------------------------------------
 
-        rows = filter_idle(rows);
+      //  rows = filter_idle(rows);
 
         //----------------------------------------------------
         // Sorting
@@ -203,6 +207,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 &app,
                 &rows,
                 engine.connections(),
+                engine.events()
             );
         })?;
 
@@ -229,7 +234,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
 
                         'l' => {
-                            app.workspace = Workspace::Analytics;
+                            app.workspace = Workspace::Timeline;
                         }
 
                         '/' => {
@@ -286,18 +291,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             KeyAction::Left => {
                 app.workspace = match app.workspace {
                     Workspace::Dashboard => Workspace::Dashboard,
-                    Workspace::Connections => Workspace::Dashboard,
-                    Workspace::Security => Workspace::Connections,
-                    Workspace::Analytics => Workspace::Security,
+                    Workspace::Connections => Workspace::Dashboard, 
+                    Workspace::Security => Workspace::Connections, 
+                    Workspace::Analytics => Workspace::Security, 
+                    Workspace::Timeline => Workspace::Analytics,    
                 };
             }
 
             KeyAction::Right => {
                 app.workspace = match app.workspace {
-                    Workspace::Dashboard => Workspace::Connections,
-                    Workspace::Connections => Workspace::Security,
-                    Workspace::Security => Workspace::Analytics,
-                    Workspace::Analytics => Workspace::Analytics,
+                    Workspace::Dashboard => Workspace::Connections, 
+                    Workspace::Connections => Workspace::Security, 
+                    Workspace::Security => Workspace::Analytics, 
+                    Workspace::Analytics => Workspace::Timeline, 
+                    Workspace::Timeline => Workspace::Timeline,                
                 };
             }
 
@@ -312,7 +319,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Refresh
         //----------------------------------------------------
 
-        thread::sleep(Duration::from_millis(100));
+        thread::sleep(Duration::from_millis(500));
     }
 
     //--------------------------------------------------------

@@ -14,11 +14,13 @@ pub mod format;
 pub mod inspector;
 pub mod stats;
 pub mod input;
+pub mod timeline;
 
 pub use app::{App, SortMode, Workspace};
 
 pub use renderer::render_ui;
 
+pub use timeline::draw_timeline;
 pub use header::render_header;
 pub use footer::render_footer;
 pub use dashboard::render_dashboard_view;

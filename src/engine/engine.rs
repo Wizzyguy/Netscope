@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use crate::collector::{
     collect_connections,
     read_process_cpu,
+    ConnectionInfo,
     ProcessInfo,
     ProcessSession,
 };
@@ -12,7 +13,10 @@ use super::{
     ConnectionEngine,
     CpuEngine,
     DashboardCache,
+    EventEngine,
+    LifecycleEngine,
     MemoryEngine,
+    ProcessEvent,
     SessionEngine,
 };
 
@@ -26,6 +30,9 @@ pub struct Engine {
     pub memory: MemoryEngine,
     pub session: SessionEngine,
     pub connection: ConnectionEngine,
+
+    pub lifecycle: LifecycleEngine,
+    pub events: EventEngine,
 
     //----------------------------------------------------
     // Cached UI Data
@@ -44,6 +51,9 @@ impl Engine {
             session: SessionEngine::new(),
             connection: ConnectionEngine::new(),
 
+            lifecycle: LifecycleEngine::new(),
+            events: EventEngine::new(),
+
             dashboard: Vec::new(),
             cache: DashboardCache::new(),
         }
@@ -61,7 +71,7 @@ impl Engine {
         self.dashboard.clear();
 
         //------------------------------------------------
-        // Active PID list
+        // Active PID List
         //------------------------------------------------
 
         let active: Vec<u32> =
@@ -73,7 +83,7 @@ impl Engine {
         self.session.cleanup(&active);
 
         //------------------------------------------------
-        // Build Dashboard Rows
+        // Build Dashboard
         //------------------------------------------------
 
         for process in processes {
@@ -92,7 +102,7 @@ impl Engine {
                 tx,
             );
 
-            let cpu_ticks =
+            let _cpu_ticks =
                 read_process_cpu(process.pid)
                     .unwrap_or(0);
 
@@ -126,6 +136,28 @@ impl Engine {
                 self.memory.value(process.pid);
 
             //------------------------------------------------
+            // Lifecycle Detection
+            //------------------------------------------------
+
+            let active_process =
+                speed_rx > 0
+                    || speed_tx > 0
+                    || rx > 0
+                    || tx > 0;
+
+            if let Some(event) = self.lifecycle.update(
+                process.pid,
+                process.process_name.clone(),
+                active_process,
+            ) {
+                self.events.add(
+                    process.pid,
+                    process.process_name.clone(),
+                    event,
+                );
+            }
+
+            //------------------------------------------------
             // Dashboard Row
             //------------------------------------------------
 
@@ -148,12 +180,30 @@ impl Engine {
         }
 
         //------------------------------------------------
+        // Detect Exited Processes
+        //------------------------------------------------
+
+        let exited =
+            self.lifecycle.cleanup(&active);
+
+        for (pid, name) in exited {
+            self.events.add(
+                pid,
+                name,
+                "exited".to_string(),
+            );
+        }
+
+        //------------------------------------------------
         // Update Dashboard Cache
         //------------------------------------------------
 
-        self.cache.update(self.dashboard.clone());
+        self.cache.update(
+            self.dashboard.clone(),
+        );
 
-        self.dashboard = self.cache.rows();
+        self.dashboard =
+            self.cache.rows();
 
         //------------------------------------------------
         // Refresh Connections
@@ -180,8 +230,18 @@ impl Engine {
 
     pub fn connections(
         &self,
-    ) -> &Vec<crate::collector::ConnectionInfo> {
+    ) -> &Vec<ConnectionInfo> {
         self.connection.connections()
+    }
+
+    //----------------------------------------------------
+    // Events
+    //----------------------------------------------------
+
+    pub fn events(
+        &self,
+    ) -> &[ProcessEvent] {
+        self.events.events()
     }
 
     //----------------------------------------------------
@@ -196,8 +256,8 @@ impl Engine {
         self.memory.reset();
         self.session.reset();
 
-        // Uncomment this if ConnectionEngine gets a clear() method.
-        // self.connection.clear();
+        self.lifecycle.clear();
+        self.events.clear();
 
         self.dashboard.clear();
         self.cache.clear();

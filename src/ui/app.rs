@@ -4,6 +4,7 @@ pub enum Workspace {
     Connections,
     Security,
     Analytics,
+    Timeline,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -84,17 +85,18 @@ impl App {
             Workspace::Dashboard => Workspace::Connections,
             Workspace::Connections => Workspace::Security,
             Workspace::Security => Workspace::Analytics,
-            Workspace::Analytics => Workspace::Dashboard,
+            Workspace::Analytics => Workspace::Timeline,
+            Workspace::Timeline => Workspace::Dashboard,
         };
     }
 
     pub fn previous_workspace(&mut self) {
         self.workspace = match self.workspace {
-            Workspace::Dashboard => Workspace::Analytics,
+            Workspace::Dashboard => Workspace::Timeline,
             Workspace::Connections => Workspace::Dashboard,
             Workspace::Security => Workspace::Connections,
             Workspace::Analytics => Workspace::Security,
-        };
+            Workspace::Timeline => Workspace::Analytics,        };
     }
 
     pub fn workspace_title(&self) -> &'static str {
@@ -103,6 +105,7 @@ impl App {
             Workspace::Connections => "Connections",
             Workspace::Security => "Security",
             Workspace::Analytics => "Analytics",
+            Workspace::Timeline => "Timeline",
         }
     }
 

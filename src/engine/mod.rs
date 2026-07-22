@@ -8,6 +8,7 @@ pub mod connection;
 pub mod dashboard;
 pub mod dashboard_cache;
 pub mod lifecycle;
+pub mod event;
 
 pub use bandwidth::BandwidthEngine;
 pub use connection::ConnectionEngine;
@@ -17,6 +18,10 @@ pub use engine::Engine;
 pub use memory::MemoryEngine;
 pub use session::SessionEngine;
 pub use dashboard_cache::DashboardCache;
+pub use event::{
+    EventEngine,
+    ProcessEvent,
+};
 pub use lifecycle::{
     LifecycleEngine,
     LifecycleRecord,

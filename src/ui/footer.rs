@@ -12,7 +12,7 @@ pub fn render_footer(
 ) {
     let text = match app.workspace {
         Workspace::Dashboard => {
-            "←→ Workspace   ↑↓ Select   / Search   R Reset Totals   Q Quit"
+            "←→ Workspace   ↑↓ Select   / Search   R Reset   Q Quit"
         }
 
         Workspace::Connections => {
@@ -25,6 +25,10 @@ pub fn render_footer(
 
         Workspace::Analytics => {
             "←→ Workspace   Q Quit"
+        }
+
+        Workspace::Timeline => {
+            "←→ Workspace   ↑↓ Scroll Events   Q Quit"
         }
     };
 
